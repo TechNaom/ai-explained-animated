@@ -25,7 +25,7 @@ More are on the way. Suggestions are welcome as GitHub issues.
 ```
 explainers/<topic>/index.html   one self-contained animated explainer per folder
 index.html                      the gallery page (GitHub Pages)
-docs/video-pipeline-design.md   how the explainers become YouTube videos
+docs/design.md                  the course-to-video agent framework (design)
 ```
 
 ## Licence

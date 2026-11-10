@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Retrieve Wide, Rerank</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout idea: one fixed 960x540 "whiteboard" stage, scaled to fit, with captions and controls under it. */
+:root{
+  --bg:#f3f5fa;--panel:#ffffff;--fg:#0f1b33;--muted:#5b6782;--line:#d6dce9;--dot:#dfe4ef;
+  --vec:#2f6fed;--vec-soft:#e4ecff;--bm:#0e9c88;--gold:#d29a00;--gold-soft:#fff3cc;
+  --ok:#1d9a52;--ok-soft:#dcf4e5;--bad:#d4433b;--bad-soft:#fde3e1;
+  --display:"Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+  color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0c1222;--panel:#131b2e;--fg:#e7ecf6;--muted:#9aa6c0;--line:#28324a;--dot:#1c2540;
+  --vec:#6f9bff;--vec-soft:#1a2747;--bm:#2cc7ae;--gold:#f2c230;--gold-soft:#3a2f0c;
+  --ok:#43c97c;--ok-soft:#123a26;--bad:#ff6b62;--bad-soft:#43181a;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0c1222;--panel:#131b2e;--fg:#e7ecf6;--muted:#9aa6c0;--line:#28324a;--dot:#1c2540;
+  --vec:#6f9bff;--vec-soft:#1a2747;--bm:#2cc7ae;--gold:#f2c230;--gold-soft:#3a2f0c;
+  --ok:#43c97c;--ok-soft:#123a26;--bad:#ff6b62;--bad-soft:#43181a;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:16px/1.55 var(--display);margin:0}
+.wrap{max-width:1000px;margin:0 auto;padding-inline:16px;padding-block:24px 40px;display:flex;flex-direction:column;gap:16px}
+header{display:flex;flex-direction:column;gap:4px}
+.eyebrow{font:700 12px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--vec)}
+h1{font:800 clamp(24px,4vw,34px)/1.15 var(--display);margin:0;text-wrap:balance}
+.sub{margin:0;color:var(--muted);max-width:65ch}
+
+/* stage */
+.stage-wrap{position:relative;width:100%;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel)}
+.stage{position:absolute;left:0;top:0;width:960px;height:540px;transform-origin:0 0;
+  background-image:radial-gradient(var(--dot) 1.2px,transparent 1.3px);background-size:22px 22px}
+.query{position:absolute;left:24px;top:16px;width:912px;height:42px;border-radius:10px;border:1.5px solid var(--line);background:var(--panel);
+  display:flex;align-items:center;gap:12px;padding:0 14px;font:600 16px var(--display)}
+.query .q{font:700 12px var(--mono);color:var(--panel);background:var(--fg);border-radius:6px;padding:3px 8px}
+.query .tag{margin-left:auto;font:500 12px var(--mono);color:var(--muted)}
+.pool-label{position:absolute;left:40px;top:72px;font:700 12px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);transition:opacity .4s}
+
+.card{position:absolute;left:0;top:0;width:50px;height:34px;border-radius:7px;border:1.5px solid var(--line);background:var(--panel);
+  font:700 13px var(--mono);color:var(--fg);display:flex;align-items:center;justify-content:center;
+  transition:transform .85s cubic-bezier(.2,.8,.2,1),opacity .6s ease,background-color .45s,border-color .45s,box-shadow .45s;will-change:transform}
+.card .b{position:absolute;top:-11px;left:50%;transform:translateX(-50%);white-space:nowrap;font:700 10px/1 var(--mono);padding:3px 6px;border-radius:9px;
+  background:var(--fg);color:var(--panel);opacity:0;transition:opacity .35s}
+.card.hasb .b{opacity:1}
+.card.vec{background:var(--vec-soft);border-color:var(--vec)}
+.card.bm{box-shadow:0 0 0 2.5px var(--bm)}
+.card.cand{border-color:var(--fg)}
+.card.ok{background:var(--ok-soft);border-color:var(--ok)}
+.card.bad{background:var(--bad-soft);border-color:var(--bad)}
+.card.ans{border-color:var(--gold);background:var(--gold-soft)}
+.card.ans::after{content:"\2605";position:absolute;right:3px;bottom:1px;font-size:10px;color:var(--gold)}
+.card.ans .b{background:var(--gold);color:#1a1300}
+.card.glow{box-shadow:0 0 0 3px var(--gold),0 0 22px var(--gold)}
+
+.lanes{position:absolute;left:40px;top:392px;display:flex;gap:12px;transition:opacity .4s}
+.chip{font:700 12px var(--mono);padding:6px 10px;border-radius:999px;border:1.5px solid}
+.chip.bm{color:var(--bm);border-color:var(--bm)}
+.chip.vec{color:var(--vec);border-color:var(--vec);background:var(--vec-soft)}
+
+.scan{position:absolute;left:40px;top:96px;width:4px;height:270px;border-radius:2px;background:var(--vec);box-shadow:0 0 16px var(--vec);opacity:0}
+.scan.on{animation:sweep 2.1s ease-in-out 2}
+@keyframes sweep{0%{opacity:0;transform:translateX(0)}10%{opacity:1}90%{opacity:1}100%{opacity:0;transform:translateX(540px)}}
+
+.llm{position:absolute;left:700px;top:96px;width:236px;height:290px;border:2px solid var(--fg);border-radius:14px;background:var(--panel)}
+.llm.shake{animation:shake .5s ease 2}
+@keyframes shake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.llm h3{margin:0;padding:12px 14px 0;font:800 18px var(--display)}
+.llm .cw{padding:0 14px;font:500 11px var(--mono);color:var(--muted)}
+.meter{position:absolute;left:14px;right:14px;bottom:16px;display:flex;flex-direction:column;gap:6px}
+.bar{height:10px;border-radius:5px;background:var(--dot);overflow:hidden}
+.fill{height:100%;width:0;border-radius:5px;background:var(--ok);transition:width 1.1s ease,background-color .4s}
+.fill.bad{background:var(--bad)}
+.mtext{font:600 11px var(--mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.warn{position:absolute;left:700px;top:60px;width:236px;text-align:center;font:700 12px var(--mono);color:#fff;background:var(--bad);border-radius:8px;padding:6px;opacity:0;transition:opacity .3s}
+.warn.on{opacity:1}
+.out{position:absolute;left:700px;top:400px;width:236px;padding:10px 12px;border-radius:10px;font:600 13px/1.4 var(--display);border:1.5px solid;opacity:0;transform:translateY(8px);transition:opacity .5s,transform .5s}
+.out.on{opacity:1;transform:none}
+.out.bad{background:var(--bad-soft);border-color:var(--bad)}
+.out.good{background:var(--ok-soft);border-color:var(--ok)}
+
+/* summary */
+.sum{position:absolute;inset:0;background:var(--panel);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:34px;padding:30px;opacity:0;pointer-events:none;transition:opacity .5s}
+.sum.show{opacity:1}
+.sum .fx{opacity:0;transform:translateY(10px);transition:opacity .5s,transform .5s}
+.sum.show .fx{opacity:1;transform:none}
+.pipe{display:flex;align-items:stretch;gap:10px}
+.node{width:150px;border:2px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:4px;background:var(--bg)}
+.node small{font:700 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.node b{font:800 16px/1.2 var(--display)}
+.node span{font:500 12px/1.35 var(--display);color:var(--muted)}
+.node.hl{border-color:var(--gold);background:var(--gold-soft)}
+.arrow{align-self:center;font:700 20px var(--mono);color:var(--muted)}
+.tags{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;max-width:820px}
+.tags .lead{width:100%;text-align:center;font:700 12px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.tag2{font:600 13px var(--display);padding:6px 12px;border-radius:999px;border:1.5px solid var(--line)}
+.take{font:800 34px/1.1 var(--display);text-align:center}
+.take em{font-style:normal;color:var(--vec)}
+
+/* caption + controls */
+.panel{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;align-items:start}
+.cap{display:flex;flex-direction:column;gap:4px;min-width:0;min-height:112px}
+.cap .step{font:700 12px var(--mono);color:var(--vec);letter-spacing:.06em;text-transform:uppercase}
+.cap h2{margin:0;font:800 22px/1.2 var(--display);text-wrap:balance}
+.cap p{margin:0;color:var(--muted);max-width:65ch}
+.ctrls{display:flex;gap:8px}
+button{font:700 14px var(--display);color:var(--fg);background:var(--panel);border:1.5px solid var(--line);border-radius:8px;padding:8px 14px;cursor:pointer}
+button:hover{border-color:var(--vec)}
+button:focus-visible{outline:3px solid var(--vec);outline-offset:2px}
+button.primary{background:var(--fg);color:var(--panel);border-color:var(--fg);min-width:84px}
+.scenes{display:flex;flex-wrap:wrap;gap:6px}
+.scenes button{font:600 13px var(--display);padding:6px 10px}
+.scenes button[aria-current="true"]{border-color:var(--vec);background:var(--vec-soft)}
+.prog{height:3px;background:var(--line);border-radius:2px;overflow:hidden}
+.prog i{display:block;height:100%;width:0;background:var(--vec)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:6px}
+.sw{width:16px;height:11px;border-radius:3px;border:1.5px solid}
+footer{font-size:13px;color:var(--muted)}
+@media (max-width:640px){.panel{grid-template-columns:1fr}.cap{min-height:150px}}
+@media (prefers-reduced-motion:reduce){.card,.fill,.out,.sum,.sum .fx{transition-duration:.01s!important}.scan.on,.llm.shake{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="eyebrow">RAG interview question · animated answer</span>
+    <h1>The answer is in chunk #12. How does it reach the LLM?</h1>
+    <p class="sub">Your RAG returns the top 5 chunks, the answer sits at rank 12, and raising top-K to 20 overflows the context window. Here is the fix, step by step.</p>
+  </header>
+
+  <div class="stage-wrap" id="wrap">
+    <div class="stage" id="stage">
+      <div class="query"><span class="q">USER</span>What is the refund window for enterprise plans?<span class="tag">query</span></div>
+      <div class="pool-label" id="poolLabel">Knowledge base · 40 chunks</div>
+      <div class="scan" id="scan"></div>
+      <div class="lanes" id="lanes"><span class="chip bm">BM25 · exact words</span><span class="chip vec">Vector · meaning</span></div>
+      <div class="warn" id="warn">Context window exceeded</div>
+      <div class="llm" id="llm">
+        <h3>LLM</h3>
+        <div class="cw">context window</div>
+        <div class="meter"><div class="bar"><div class="fill" id="fill"></div></div><div class="mtext" id="mtext">0 tokens</div></div>
+      </div>
+      <div class="out" id="out"></div>
+      <div id="cards"></div>
+      <div class="sum" id="sum">
+        <div class="pipe fx" style="transition-delay:.1s">
+          <div class="node"><small>Input</small><b>Query</b><span>The user's question</span></div>
+          <div class="arrow">&#8594;</div>
+          <div class="node"><small>Retrieve wide</small><b>Hybrid search</b><span>BM25 + vectors, fused with RRF, about 50 candidates</span></div>
+          <div class="arrow">&#8594;</div>
+          <div class="node hl"><small>Rerank</small><b>Cross-encoder</b><span>Reads question and chunk together</span></div>
+          <div class="arrow">&#8594;</div>
+          <div class="node"><small>Send narrow</small><b>Top 5</b><span>About 3.5k tokens</span></div>
+          <div class="arrow">&#8594;</div>
+          <div class="node"><small>Output</small><b>LLM</b><span>Answer with a citation</span></div>
+        </div>
+        <div class="tags fx" style="transition-delay:.5s">
+          <span class="lead">Also fix the ranking at the source</span>
+          <span class="tag2">Query rewriting / HyDE</span><span class="tag2">Contextual chunk headers</span><span class="tag2">Small-to-big retrieval</span><span class="tag2">Metadata filters</span><span class="tag2">recall@k and MRR evals</span>
+        </div>
+        <div class="take fx" style="transition-delay:.9s">Retrieve <em>wide</em>. Rerank. Send <em>narrow</em>.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="prog"><i id="prog"></i></div>
+
+  <div class="panel">
+    <div class="cap" aria-live="polite">
+      <span class="step" id="capStep"></span>
+      <h2 id="capTitle"></h2>
+      <p id="capText"></p>
+    </div>
+    <div class="ctrls">
+      <button id="back" aria-label="Previous scene">Back</button>
+      <button id="play" class="primary">Pause</button>
+      <button id="next" aria-label="Next scene">Next</button>
+    </div>
+  </div>
+  <div class="scenes" id="scenes"></div>
+
+  <div class="legend">
+    <span><i class="sw" style="border-color:var(--gold);background:var(--gold-soft)"></i>Chunk #12, the answer</span>
+    <span><i class="sw" style="border-color:var(--vec);background:var(--vec-soft)"></i>Vector match</span>
+    <span><i class="sw" style="border-color:var(--bm)"></i>BM25 match</span>
+    <span><i class="sw" style="border-color:var(--ok);background:var(--ok-soft)"></i>Sent to the LLM</span>
+    <span><i class="sw" style="border-color:var(--bad);background:var(--bad-soft)"></i>Overflow</span>
+  </div>
+  <footer>Manohar Papasani · AI R&amp;D. Keys: Space plays or pauses, arrow keys change scene.</footer>
+</div>
+
+<script>
+(function(){
+  var N=40, ANS=12;
+  var VEC=[3,27,8,19,31,5,22,14,36,2,17,12,29,9,25,33,6,38,11,20];   // vector ranking: answer at 12
+  var BM=[12,7,3,24,19,30,15,8,27,35,4,22];                           // BM25 ranking: answer at 1
+  var CAND=[3,27,19,8,22,7,31,5,12,24,14,30,15,36,2,17];              // after RRF: answer at 9
+  var RR=[12,19,3,24,27,8,7,22,31,14,5,30,15,2,36,17];                // after rerank: answer at 1
+  var SC=[.97,.81,.74,.62,.55,.48,.41,.37,.30,.26,.22,.18,.15,.11,.08,.05];
+  var SCORE={};RR.forEach(function(id,i){SCORE[id]=SC[i]});
+  var OVER=[[700,404,-9],[752,414,7],[804,402,-5],[856,416,10],[904,404,-7],[704,456,6],[756,466,-10],[808,452,8],[860,468,-6],[906,458,9]];
+
+  function grid(id){var i=id-1;return [40+(i%8)*62,104+Math.floor(i/8)*58]}
+  function slot(k){return [716+(k%4)*54,150+Math.floor(k/4)*44]}
+  function list(r){return [60+(r%4)*130,112+Math.floor(r/4)*70]}
+
+  function base(){
+    var c={};for(var id=1;id<=N;id++){var g=grid(id);c[id]={x:g[0],y:g[1],cls:id===ANS?['ans']:[],b:'',op:1,rot:0,sc:1,d:0}}
+    return {cards:c,pct:0,pbad:false,mtext:'0 tokens',out:'',outCls:'',warn:false,lanes:false,scan:false,pool:'Knowledge base · 40 chunks',sum:false}
+  }
+  function reset(s){var b=base();for(var k in b)s[k]=b[k]}
+  function add(s,id,c){if(s.cards[id].cls.indexOf(c)<0)s.cards[id].cls.push(c)}
+  function rm(s,id,c){s.cards[id].cls=s.cards[id].cls.filter(function(x){return x!==c})}
+  function at(s,id,p){s.cards[id].x=p[0];s.cards[id].y=p[1]}
+
+  var STEPS=[
+    {sc:0,dur:4200,t:'Your RAG retrieves the top 5 chunks',p:'A user asks a question. The knowledge base is split into 40 chunks, and the gold card, chunk #12, holds the answer.',
+      f:function(s){reset(s)}},
+    {sc:0,dur:4800,t:'Vector search ranks by similarity',p:'Embedding similarity picks its top 5. Chunk #12 ranks 12th, because the question and the policy use different words.',
+      f:function(s){VEC.slice(0,5).forEach(function(id,k){add(s,id,'vec');s.cards[id].b='#'+(k+1)});s.cards[ANS].b='vector #12'}},
+    {sc:0,dur:5200,t:'Only those 5 reach the LLM',p:'The answer never arrives, so the model guesses or says it cannot find it.',
+      f:function(s){VEC.slice(0,5).forEach(function(id,k){at(s,id,slot(k));s.cards[id].d=k*130});s.pct=25;s.mtext='5 chunks · about 3.5k tokens';s.out='Sorry, I can’t find a refund policy for enterprise plans.';s.outCls='bad'}},
+    {sc:0,dur:6000,t:'Raising top-K to 20 floods the context',p:'Twenty chunks overflow the window and cost more. Chunk #12 still lands in the overflow, buried in noise.',
+      f:function(s){s.out='';VEC.forEach(function(id,k){add(s,id,'vec');s.cards[id].d=k*70;
+        if(k<10){at(s,id,slot(k))}else{var o=OVER[k-10];at(s,id,o);s.cards[id].rot=o[2];add(s,id,'bad')}
+        s.cards[id].b=k<5?'#'+(k+1):''});s.cards[ANS].b='#12';s.pct=100;s.pbad=true;s.mtext='20 chunks · about 14k tokens · over the limit';s.warn=true}},
+
+    {sc:1,dur:4200,t:'Step 1: retrieve wide',p:'Keep the cheap step wide and fetch many candidates. None of them go to the LLM yet.',
+      f:function(s){reset(s);s.lanes=true}},
+    {sc:1,dur:5600,t:'Two searches instead of one',p:'BM25 matches exact words such as “enter­prise” and “refund”. Vector search matches meaning. BM25 ranks chunk #12 first.',
+      f:function(s){s.lanes=true;BM.forEach(function(id){add(s,id,'bm')});VEC.slice(0,12).forEach(function(id){add(s,id,'vec')});s.cards[ANS].b='BM25 #1'}},
+    {sc:1,dur:6000,t:'Merge them with reciprocal rank fusion',p:'RRF combines both rankings into one candidate pool. Chunk #12 is in the pool at rank 9, and the LLM has used zero tokens so far.',
+      f:function(s){s.lanes=false;var inC={};CAND.forEach(function(id){inC[id]=1});
+        for(var id=1;id<=N;id++){if(!inC[id]){s.cards[id].op=0;s.cards[id].sc=.6}}
+        CAND.forEach(function(id,r){at(s,id,list(r));rm(s,id,'bm');rm(s,id,'vec');add(s,id,'cand');s.cards[id].b='#'+(r+1);s.cards[id].d=r*45});
+        s.pool='Candidate pool · hybrid search + RRF · top 16 shown';s.mtext='0 tokens used so far'}},
+
+    {sc:2,dur:5200,t:'Step 2: rerank with a cross-encoder',p:'A reranker reads the question and each chunk together, so it scores real relevance instead of similar wording.',
+      f:function(s){s.scan=true;CAND.forEach(function(id){s.cards[id].b=SCORE[id].toFixed(2)});s.pool='Cross-encoder scores each candidate against the question'}},
+    {sc:2,dur:5200,t:'The right chunk rises to the top',p:'Sorted by reranker score, chunk #12 moves from rank 9 to rank 1.',
+      f:function(s){s.scan=false;RR.forEach(function(id,r){at(s,id,list(r));s.cards[id].b='#'+(r+1)+' · '+SCORE[id].toFixed(2);s.cards[id].d=r*35});add(s,ANS,'glow');s.pool='Reranked by relevance'}},
+
+    {sc:3,dur:4200,t:'Step 3: send only the top 5',p:'Everything below the cut is dropped. Only the five best chunks go forward.',
+      f:function(s){RR.forEach(function(id,r){if(r<5)add(s,id,'ok');else s.cards[id].op=.2});s.pool='Keep the top 5, drop the rest'}},
+    {sc:3,dur:4600,t:'A small, focused context',p:'Five chunks, about 3.5k tokens. The context stays well inside the limit.',
+      f:function(s){RR.forEach(function(id,r){if(r<5){at(s,id,slot(r));s.cards[id].d=r*130}else s.cards[id].op=0});s.pct=25;s.mtext='5 chunks · about 3.5k tokens'}},
+    {sc:3,dur:5600,t:'The model answers, with a citation',p:'The token budget is the same as the first try, but this time the answer is inside it.',
+      f:function(s){s.out='Enterprise plans can be refunded within 30 days of the invoice date. [chunk #12]';s.outCls='good'}},
+
+    {sc:4,dur:10000,t:'Retrieve wide. Rerank. Send narrow.',p:'More top-K is a band-aid and reranking is the fix. Measure recall@k on an eval set to prove the right chunk reaches the LLM.',
+      f:function(s){s.sum=true}}
+  ];
+  var SCENES=['The problem','Retrieve wide','Rerank','Send narrow','Summary'];
+
+  // DOM
+  var cardsEl=document.getElementById('cards'),els={};
+  for(var id=1;id<=N;id++){var e=document.createElement('div');e.className='card';e.innerHTML=id+'<span class="b"></span>';cardsEl.appendChild(e);els[id]=e}
+  var $=function(i){return document.getElementById(i)};
+  var sceneBtns=SCENES.map(function(n,i){var b=document.createElement('button');b.textContent=(i+1)+'. '+n;b.addEventListener('click',function(){go(first(i))});$('scenes').appendChild(b);return b});
+
+  function state(n){var s=base();for(var k=0;k<=n;k++){if(k===n){for(var id in s.cards)s.cards[id].d=0}STEPS[k].f(s)}return s}
+  function render(s){
+    for(var id=1;id<=N;id++){var c=s.cards[id],e=els[id];
+      e.style.transitionDelay=c.d+'ms';
+      e.style.transform='translate('+c.x+'px,'+c.y+'px) rotate('+c.rot+'deg) scale('+c.sc+')';
+      e.style.opacity=c.op;e.className='card'+(c.cls.length?' '+c.cls.join(' '):'')+(c.b?' hasb':'');
+      e.querySelector('.b').textContent=c.b}
+    $('fill').style.width=s.pct+'%';$('fill').className='fill'+(s.pbad?' bad':'');$('mtext').textContent=s.mtext;
+    $('out').textContent=s.out;$('out').className='out'+(s.out?' on '+s.outCls:'');
+    $('warn').className='warn'+(s.warn?' on':'');$('llm').className='llm'+(s.warn?' shake':'');
+    $('lanes').style.opacity=s.lanes?1:0;$('poolLabel').textContent=s.pool;
+    var sc=$('scan');sc.className='scan';if(s.scan){void sc.offsetWidth;sc.className='scan on'}
+    $('sum').className='sum'+(s.sum?' show':'');
+  }
+  function first(sc){for(var i=0;i<STEPS.length;i++)if(STEPS[i].sc===sc)return i;return 0}
+
+  var i=0,playing=true,timer=null;
+  function go(n){i=n;var st=STEPS[i];render(state(i));
+    $('capStep').textContent='Scene '+(st.sc+1)+' of '+SCENES.length+' · '+SCENES[st.sc];
+    $('capTitle').textContent=st.t;$('capText').textContent=st.p;
+    sceneBtns.forEach(function(b,k){b.setAttribute('aria-current',k===st.sc?'true':'false')});
+    schedule()}
+  function schedule(){clearTimeout(timer);var p=$('prog');p.style.transition='none';p.style.width='0';
+    if(!playing)return;var d=STEPS[i].dur;void p.offsetWidth;p.style.transition='width '+d+'ms linear';p.style.width='100%';
+    timer=setTimeout(function(){go(i+1<STEPS.length?i+1:0)},d)}
+  function toggle(){playing=!playing;$('play').textContent=playing?'Pause':'Play';schedule()}
+  function next(){var sc=STEPS[i].sc;go(sc+1<SCENES.length?first(sc+1):0)}
+  function back(){var sc=STEPS[i].sc,f=first(sc);go(i>f?f:first(Math.max(0,sc-1)))}
+  $('play').addEventListener('click',toggle);$('next').addEventListener('click',next);$('back').addEventListener('click',back);
+  document.addEventListener('keydown',function(e){if(e.target.tagName==='BUTTON'&&e.key===' ')return;
+    if(e.key===' '){e.preventDefault();toggle()}else if(e.key==='ArrowRight')next();else if(e.key==='ArrowLeft')back()});
+
+  // scale the 960x540 stage to the available width
+  var wrap=$('wrap'),stage=$('stage');
+  function fit(){var k=wrap.clientWidth/960;stage.style.transform='scale('+k+')';wrap.style.height=(540*k)+'px'}
+  fit();if(window.ResizeObserver)new ResizeObserver(fit).observe(wrap);else window.addEventListener('resize',fit);
+
+  go(0);
+})();
+</script>
+</body>
+</html>

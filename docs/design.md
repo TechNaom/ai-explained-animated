@@ -69,21 +69,24 @@ Owner approval points: (a) the course plan, optional; (b) each finished video, r
 | # | Agent | Primary model | Fallback / escalation | Why |
 |---|---|---|---|---|
 | 1 | Course Planner | **Claude Opus 5.5** | Sonnet 5.5 | Runs once per course and shapes everything; about $0.60 per course |
-| 2 | Research | **DeepSeek V4-Flash** + a web search API | Grok 4 Fast | Reading many sources is high-volume; the cheapest strong reader |
+| 2 | Research | **DeepSeek V4-Flash** + a web search API | Qwen3.8 Flash, then Grok 4 Fast | Reading many sources is high-volume; the cheapest strong reader |
 | 3 | Teacher | **Claude Sonnet 5.5** | Opus 5.5 | The script is the heart of learning quality; only about 13K tokens per lesson, so premium is affordable |
 | 4 | Fact Checker | **Gemini Flash** (free tier) | Grok 4 Fast | A different family from the Teacher catches its blind spots |
-| 5 | Storyboard | **DeepSeek V4-Pro** | Sonnet 5.5 on validation failure | Large structured output; Pro is strong at structured JSON at a fraction of Sonnet |
+| 5 | Storyboard | **DeepSeek V4-Pro** or **Qwen3.7 Plus** (the bench decides) | The other one, then Sonnet 5.5 on validation failure | Large structured output; both are strong at structured JSON at a fraction of Sonnet |
 | 6 | Layout Checker | **Code** (no model) | none | Overlaps, overflow and contrast are exact geometry; free and deterministic |
-| 7 | Spec Fixer | **DeepSeek V4-Flash** | Sonnet 5.5 after 2 failed rounds | Fixing a precise error list is easy work |
+| 7 | Spec Fixer | **DeepSeek V4-Flash** | Qwen3.8 Flash, then Sonnet 5.5 after 2 failed rounds | Fixing a precise error list is easy work |
 | 8 | Voice | **Sarvam Bulbul V3**, cloned voice | ElevenLabs | Owner's voice, Indian English, 11 Indian languages later |
 | 8a | Pronunciation | **Dictionary in code** + Claude Haiku 5.5 for new terms | none | Most terms repeat across lessons |
 | 9 | Voice QA | **Whisper** (open source, free) | Sarvam speech-to-text | Free and accurate enough to catch skipped or misread words |
 | 11 | Video QA | **Gemini Flash** (free tier) | none | Watches video natively |
 | 12 | Packaging | **Claude Haiku 5.5** | DeepSeek V4-Flash | Short, simple outputs |
+| 15 | Translator (later: Telugu, Hindi and other Indian languages) | **Qwen3.7 Plus** | Sonnet 5.5 | Qwen's broad multilingual coverage; Sarvam voices the result in the same cloned voice |
 | 13 | Quality gate judge | **Claude Sonnet 5.5** | none | Scores the finished lesson against the rubric; small input |
 | — | New components | **Claude in Claude Code** | none | Rare; subscription, not API |
 
 All model calls go through one router (OpenRouter or direct APIs) so that any agent's model is a one-line config change.
+
+**Provider diversity:** DeepSeek and Qwen back each other up on every high-volume step, so an outage, a price rise or a model retirement at one provider never stops a course run.
 
 ## 6. Cost estimate for a 20-lesson course
 

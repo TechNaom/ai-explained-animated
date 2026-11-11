@@ -20,7 +20,7 @@ Give the framework a **topic or a whole course** plus requirements (audience, de
 | Decision | Choice |
 |---|---|
 | Repo | `TechNaom/ai-explained-animated`, public, Pages; code Apache-2.0, content CC BY 4.0 |
-| Voice | Owner's own voice, cloned once with **Sarvam Bulbul V3** (30 to 60 s consented sample); ElevenLabs as fallback |
+| Voice | Owner's own voice, cloned with **Chatterbox** (MIT, free, runs on the laptop) from a consented sample; approved settings 2026-11-12 |
 | Formats | Long 16:9 + Short 9:16 from the same source |
 | Channel | Existing channel; uploads are always private; the owner makes each video public |
 | Visual style | Our own animation engine and component library for all teaching visuals; OpenArt optional for cinematic hooks only |
@@ -48,7 +48,7 @@ Course input (syllabus / PDF / notes / URL / one topic)
 5 Storyboard ───── script -> scene spec JSON (positions, steps, captions, timing hints)
 6 Layout Checker ─ CODE: schema, overlaps, text overflow, contrast, min font size
 7 Spec Fixer ───── applies the exact error list from step 6 (max 2 rounds, then escalate)
-8 Voice ────────── pronunciation pass -> Sarvam TTS per step -> exact step durations
+8 Voice ────────── pronunciation pass -> Chatterbox cloned voice per sentence -> exact step durations
 9 Voice QA ─────── speech-to-text on the audio, compare with the script, regenerate bad lines
 10 Render ──────── CODE: Playwright + ffmpeg -> 1080p long video and 1080x1920 Short
 11 Video QA ────── a video-capable model watches the render: pacing, readability, sync
@@ -76,7 +76,7 @@ Owner approval points: (a) the course plan, optional; (b) each finished video, r
 | 5 | Storyboard | **DeepSeek V4-Pro** or **Qwen3.7 Plus** (the bench decides) | The other one, then Sonnet 5.5 on validation failure | Large structured output; both are strong at structured JSON at a fraction of Sonnet |
 | 6 | Layout Checker | **Code** (no model) | none | Overlaps, overflow and contrast are exact geometry; free and deterministic |
 | 7 | Spec Fixer | **DeepSeek V4-Flash** | Qwen3.8 Flash, then Sonnet 5.5 after 2 failed rounds | Fixing a precise error list is easy work |
-| 8 | Voice | **Sarvam Bulbul V3**, cloned voice | ElevenLabs | Owner's voice, Indian English, 11 Indian languages later |
+| 8 | Voice | **Chatterbox** (open source, MIT), owner's cloned voice, on the laptop | Free Kaggle or Colab GPU for big batches; Sarvam later for Indian languages | Free; owner chose free options only (2026-11-12) |
 | 8a | Pronunciation | **Dictionary in code** + Claude Haiku 5.5 for new terms | none | Most terms repeat across lessons |
 | 9 | Voice QA | **Whisper** (open source, free) | Sarvam speech-to-text | Free and accurate enough to catch skipped or misread words |
 | 11 | Video QA | **Gemini Flash** (free tier) | none | Watches video natively |
